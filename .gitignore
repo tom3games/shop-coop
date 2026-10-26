@@ -1,0 +1,4 @@
+node_modules/
+tools/shots/
+urls.txt
+.DS_Store

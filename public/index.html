@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>仮の店 ― 友だちと回す一人称の店</title>
+<meta name="description" content="一人称で店員になって、焼く・注ぐ・渡す・会計する。最初はのんびり、ピークは全員で走り回る協力ゲーム。スマホでもPCでも、1〜4人。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="仮の店 ― 友だちと回す一人称の店">
+<meta property="og:description" content="焼いて、注いで、渡して、会計。ピークは全員で走り回る。1〜4人の協力ゲーム。">
+<meta property="og:image" content="/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#2b2118">
+<link rel="stylesheet" href="/style.css?v=1">
+<script>
+  // 起動に失敗したときに原因を画面に出す（module の読み込み自体が失敗すると中の catch は動かないため、素の script で拾う）
+  window.__errs = []
+  addEventListener('error', e => window.__errs.push(e.message || String(e)))
+  addEventListener('unhandledrejection', e => window.__errs.push(String(e.reason)))
+  setTimeout(() => {
+    if (window.__boot) return
+    const d = document.getElementById('bootErr'); d.hidden = false
+    d.textContent = '起動できませんでした: ' + (window.__errs.join(' / ') || '読み込み失敗') + ' / ' + navigator.userAgent
+  }, 6000)
+  // ブラウザの拡大を止める（iOS は viewport の指定を無視するため）
+  ;(function () {
+    const stop = e => e.preventDefault()
+    for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, stop, { passive: false })
+    document.addEventListener('touchmove', e => { if (e.touches.length > 1 && !e.target.closest('#cv')) e.preventDefault() }, { passive: false })
+    let lastEnd = 0
+    document.addEventListener('touchend', e => {
+      const now = Date.now()
+      if (now - lastEnd < 350 && !e.target.closest('input, button, summary, label, a')) e.preventDefault()
+      lastEnd = now
+    }, { passive: false })
+    document.addEventListener('dblclick', stop, { passive: false })
+    document.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault() }, { passive: false })
+    document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0'].includes(e.key)) e.preventDefault() })
+  })()
+</script>
+</head>
+<body>
+<div id="bootErr" class="boot-err" hidden></div>
+<canvas id="cv"></canvas>
+
+<!-- 営業中の画面 -->
+<div id="hud" hidden>
+  <div class="h-top">
+    <div class="h-clock"><b id="hPhase"></b><span id="hTime"></span><div class="h-prog"><i id="hProg"></i></div></div>
+    <div id="orders" class="orders"></div>
+    <div class="h-right">
+      <span id="hMoney" class="h-money"></span>
+      <button id="muteBtn" class="icon-btn" aria-label="音"></button>
+      <button id="menuBtn" class="icon-btn" aria-label="メニュー"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    </div>
+  </div>
+  <div class="h-chips"><span id="hPay" class="chip pay" hidden></span><span id="hQueue" class="chip" hidden></span></div>
+  <div id="hint" class="hint" hidden></div>
+  <div id="feed" class="feed"></div>
+  <div class="cross"></div>
+  <div id="prompt" class="prompt" hidden></div>
+  <div id="held" class="held" hidden></div>
+  <div id="banner" class="banner" hidden></div>
+  <div id="stick" class="stick" hidden><div id="stickKnob" class="stick-knob"></div></div>
+  <div class="t-btns">
+    <button id="runBtn" class="t-btn run" aria-pressed="false" aria-label="走る（押すたびに切り替え）"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14.5" cy="4.5" r="2" fill="currentColor"/><path d="M8 21l3-6 3 2v5M6 11l3-3h4l3 4 3 1M11 8l-2 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><small>走る</small></button>
+    <button id="useBtn" class="t-btn use" data-on="0" aria-label="使う"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V6.5a1.5 1.5 0 0 1 3 0V11m0-1V4.5a1.5 1.5 0 0 1 3 0V10m0 0V5.5a1.5 1.5 0 0 1 3 0V11m0-2.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-2.7L3.5 14a1.6 1.6 0 0 1 2.6-1.8L7 13.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+  <div id="pcHelp" class="pc-help">クリックで視点を固定 / WASD 移動 / Shift 走る / E かクリックで使う / Esc メニュー</div>
+  <div id="menu" class="menu" hidden>
+    <div class="card menu-card">
+      <h2>休憩</h2>
+      <p class="muted" id="menuNote"></p>
+      <button id="resumeBtn" class="primary">続ける</button>
+      <button id="menuHowBtn">遊び方</button>
+      <button id="quitBtn" class="ghost">店を出る</button>
+    </div>
+  </div>
+</div>
+
+<main id="screens">
+  <section id="title" class="card wide" hidden>
+    <div class="t-col">
+      <p class="eyebrow">一人称の協力店舗ゲーム</p>
+      <h1>仮の店</h1>
+      <p class="lead">焼いて、注いで、渡して、会計。はじめはのんびり、ピークは全員で走り回る。</p>
+      <label class="field">名前<input id="name" maxlength="12" autocomplete="nickname" placeholder="例: たろう" enterkeyhint="done"></label>
+    </div>
+    <div class="t-col">
+      <div class="locs" id="locs" role="radiogroup" aria-label="出店場所"></div>
+      <div class="row"><button id="soloBtn" class="primary grow">ひとりで営業</button><button id="createBtn" class="grow">部屋を作る</button></div>
+      <div class="row"><input id="code" maxlength="4" autocapitalize="characters" placeholder="参加コード" aria-label="参加コード"><button id="joinBtn">参加</button></div>
+      <div class="row"><button id="upBtn" class="ghost grow">設備 <span id="wallet" class="wallet"></span></button><button id="howBtn" class="ghost grow">遊び方</button></div>
+    </div>
+  </section>
+
+  <section id="lobby" class="card wide" hidden>
+    <div class="t-col">
+      <p class="muted">参加コード</p>
+      <p class="code" id="roomCode"></p>
+      <div class="row"><input id="invite" readonly aria-label="招待URL"><button id="copyBtn">招待</button></div>
+      <ul id="players" class="players"></ul>
+    </div>
+    <div class="t-col">
+      <div class="locs" id="lobbyLocs" role="radiogroup" aria-label="出店場所"></div>
+      <p id="lobbyHint" class="muted center"></p>
+      <button id="startBtn" class="primary" hidden>営業開始</button>
+      <button id="leaveBtn" class="ghost">部屋を出る</button>
+    </div>
+  </section>
+
+  <section id="result" class="card wide" hidden>
+    <div class="t-col">
+      <p class="eyebrow" id="rLoc"></p>
+      <h2 class="r-title" id="rTitle"></h2>
+      <p class="r-profit"><small>今日の利益</small><b id="rProfit"></b></p>
+      <p id="rBest" class="r-best"></p>
+    </div>
+    <div class="t-col">
+      <div class="r-grid" id="rGrid"></div>
+      <p id="rHint" class="muted center"></p>
+      <div class="row"><button id="againBtn" class="primary grow">もう一回</button><button id="rUpBtn" class="grow">設備</button></div>
+      <button id="toTitleBtn" class="ghost">タイトルへ</button>
+    </div>
+  </section>
+
+  <section id="upgrades" class="card" hidden>
+    <h2>設備 <span class="wallet" id="wallet2"></span></h2>
+    <p class="muted">営業の利益で買える。部屋ではホストの店の設備を使う。</p>
+    <div id="upList" class="up-list"></div>
+    <button id="upBack" class="ghost">戻る</button>
+  </section>
+
+  <section id="howto" class="card" hidden>
+    <h2>遊び方</h2>
+    <ol class="how">
+      <li><b>注文を見る</b> 客の頭の上と画面の上に、ほしい物が出る。下の棒が待ってくれる残り時間</li>
+      <li><b>仮パン</b> 左の壁の生地箱から生地を取り、奥のオーブンへ。ゲージが緑の間に取り出す（よく焼きはオレンジ）</li>
+      <li><b>仮ドリンク</b> 奥のカップを取り、ドリンク機に置く。満タンになったら取る</li>
+      <li><b>渡す・会計</b> カウンター越しに客へ渡す。全部そろうと右のレジに並ぶので会計する</li>
+      <li><b>補充</b> 生地箱が空になったら、右奥の材料の箱を生地箱へ運ぶ</li>
+      <li><b>操作</b> スマホは左で移動・右をなぞって見回す・手のボタンで使う・走るは押すたびに切り替え。PCは WASD・マウス・E</li>
+    </ol>
+    <button id="howBack" class="ghost">戻る</button>
+  </section>
+</main>
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script type="module" src="/js/main.js?v=1"></script>
+</body>
+</html>
