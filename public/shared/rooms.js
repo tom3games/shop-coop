@@ -20,8 +20,8 @@ export function cleanName(n) {
 }
 
 export class Rooms {
-  constructor({ send, now = () => Date.now(), shop, locations, phases, upgrades, rand = Math.random }) {
-    Object.assign(this, { send, now, shop, locations, phases, upgradeDefs: upgrades, rand })
+  constructor({ send, now = () => Date.now(), shop, rand = Math.random }) {
+    Object.assign(this, { send, now, shop, locations: shop.locations, upgradeDefs: shop.upgrades, rand })
     this.sessions = new Map() // id -> { token, code }
     this.rooms = new Map()
   }
@@ -127,7 +127,7 @@ export class Rooms {
     room.round++
     room.sim = createSim({
       shop: this.shop, location: this.locations[room.opts.location], players: players.map(p => ({ id: p.id, name: p.name })),
-      upgrades: room.opts.upgrades, duration: room.opts.duration, phases: this.phases, seed: Math.floor(this.rand() * 2 ** 31)
+      upgrades: room.opts.upgrades, duration: room.opts.duration, seed: Math.floor(this.rand() * 2 ** 31)
     })
     room.phase = 'playing'
     room.result = null

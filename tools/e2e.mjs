@@ -12,7 +12,7 @@ const base = `http://localhost:${srv.port}`
 let fail = 0
 const check = (ok, label) => { console.log(ok ? 'OK  ' : 'NG  ', label); if (!ok) fail++ }
 const SIZES = [[390, 844], [360, 640], [844, 390], [667, 375], [1280, 720]]
-const DUR = 75
+const DUR = 95
 
 async function fits(page, label, sizes = SIZES) {
   const orig = page.viewportSize()
@@ -52,30 +52,39 @@ async function fits(page, label, sizes = SIZES) {
 }
 
 // 画面の中の店員を動かす: 状態を見て次にやることを決め、照準を合わせて「使う」を押す（本物の照準判定を通る）
+// cook = 麺→茹で→丼→スープ→（味）→盛る→トッピング→出す / support = 会計・器を下げる・洗う・麺の補充
 async function drive(page, role) {
   const want = await page.evaluate(role => {
     const S = window.__shop, s = S.state(), me = s.players[S.you()]
     if (!me) return null
-    const held = me.hold && s.items[me.hold]
-    const wants = t => s.customers.find(c => c.st === 'order' && c.arrived && c.order.some(l => !l.done && l.p === t))
-    const free = id => !s.stations[id].slots[0]
+    const it = me.hold && s.items[me.hold]
+    const W = { kata: [5.0, 6.6], normal: [7.2, 8.8], yawa: [9.6, 11.4] }
+    const waiting = s.customers.filter(c => c.st === 'order' && c.arrived && c.order.some(l => !l.done))
+    const boilers = Object.values(s.stations).filter(x => x.type === 'boiler')
+    const boiling = boilers.flatMap(b => b.slots.filter(Boolean).map(id => s.items[id]))
     let t = null
-    if (held) {
-      if (held.type === 'dough' && free('oven1')) t = ['st', 'oven1']
-      else if (held.type === 'cup' && free('drink1')) t = ['st', 'drink1']
-      else if (held.type === 'bread' || held.type === 'drink') { const c = wants(held.type); t = c ? ['cu', c.id] : ['st', 'island'] }
-    } else {
-      if (s.customers.some(c => c.st === 'pay' && c.payIdx === 0 && c.arrived)) t = ['st', 'register']
-      else if (role === 'bread') {
-        const b = s.stations.oven1.slots[0] && s.items[s.stations.oven1.slots[0]]
-        if (b && b.cook >= 7) t = ['st', 'oven1']
-        else if (!b && wants('bread')) t = ['st', 'dough']
-      } else if (role === 'drink') {
-        const d = s.stations.drink1.slots[0] && s.items[s.stations.drink1.slots[0]]
-        if (d && d.type === 'drink') t = ['st', 'drink1']
-        else if (!d && wants('drink')) t = ['st', 'cups']
+    if (it) {
+      if (it.type === 'noodle') { const b = boilers.find(b => b.slots.includes(null)); if (b) t = ['st', b.id] }
+      else if (it.type === 'dirty') t = ['st', 'sink']
+      else if (it.type === 'crate') t = ['st', 'noodles']
+      else if (it.type === 'bowl') {
+        const c = waiting[0], l = c && c.order.find(l => !l.done)
+        if (!c) t = null // 待っている客がいなければ持ったまま待つ
+        else if (!it.soup) t = ['st', 'soup']
+        else if (l.koi && !it.koi) t = ['st', 'tare']
+        else if (l.oil && !it.oil) t = ['st', 'abura']
+        else if (it.noodle == null) { const n = boiling.filter(n => n.cook >= W[l.hard || 'normal'][0] + 0.2).sort((a, b) => b.cook - a.cook)[0]; if (n) t = ['it', n.id] }
+        else { const miss = ['negi', ...(l.top || [])].find(k => !it.top.includes(k)); t = miss ? ['st', miss] : ['cu', c.id] }
       }
-      if (!t) for (const id of s.stations.island.slots) { const it = id && s.items[id]; if (it && wants(it.type)) { t = ['it', id]; break } }
+    } else {
+      if (role === 'support') {
+        if (s.customers.some(c => c.st === 'pay' && c.payIdx === 0 && c.arrived)) t = ['st', 'register']
+        else if (s.stations.noodles.stock <= 1) t = ['st', 'crates']
+        else { const d = s.stations.counter.slots.find(Boolean); if (d) t = ['it', d] }
+      } else {
+        if (boiling.length < waiting.length && s.stations.noodles.stock > 0 && boilers.some(b => b.slots.includes(null))) t = ['st', 'noodles']
+        else if (boiling.length && s.stations.bowls.stock > 0) t = ['st', 'bowls']
+      }
     }
     if (t) S.aimAt(t[0], t[1])
     return t
@@ -86,7 +95,7 @@ async function drive(page, role) {
     const S = window.__shop, a = S.action(), tg = S.target()
     if (!a || a.none) return { miss: want, tg, a }
     S.use()
-    return { did: a.kind, want, tg }
+    return { did: a.kind, label: a.label, want, tg }
   }, want)
 }
 
@@ -108,7 +117,7 @@ for (const [bname, bt] of [['chromium', chromium], ['webkit', webkit]]) {
   const g2 = await mk({ width: 390, height: 844 }, true)
   await host.goto(`${base}/?duration=${DUR}`)
   await host.waitForFunction(() => window.__boot)
-  check((await host.title()).includes('仮の店'), `${bname}: 題名`)
+  check((await host.title()).includes('ラーメン'), `${bname}: 題名`)
   await fits(host, `${bname}-title`)
   await host.fill('#name', 'ホスト')
   await host.click('#createBtn')
@@ -139,15 +148,15 @@ for (const [bname, bt] of [['chromium', chromium], ['webkit', webkit]]) {
   const seen = await host.evaluate(() => { const s = __shop.state(); return Object.values(s.players).find(p => p.name === 'たて') })
   check(seen && Math.abs(seen.x - 2.0) < 0.05 && Math.abs(seen.z + 0.5) < 0.05, `${bname}: 縦持ちの人の位置がホストに届く ${seen && [seen.x, seen.z]}`)
 
-  // 営業: ホスト=パン、横持ち=ドリンク。縦持ち=会計の手伝い
+  // 営業: ホストと横持ち=作る係、縦持ち=会計・片付け係
   const log = { host: [], g1: [], g2: [] }
   let shotGame = false
   const t0 = Date.now()
   while (Date.now() - t0 < (DUR + 25) * 1000) {
     const st = await host.evaluate(() => window.__app.room()?.phase)
     if (st === 'result') break
-    const [a, b, c] = await Promise.all([drive(host, 'bread'), drive(g1, 'drink'), drive(g2, 'pay')])
-    for (const [k, v] of [['host', a], ['g1', b], ['g2', c]]) if (v) log[k].push(v.did || 'miss')
+    const [a, b, c] = await Promise.all([drive(host, 'cook'), drive(g1, 'cook'), drive(g2, 'support')])
+    for (const [k, v] of [['host', a], ['g1', b], ['g2', c]]) if (v) { log[k].push(v.did ? v.label : 'miss'); if (!v.did && (log.m = (log.m || 0) + 1) <= 6) console.log('   外れ', k, JSON.stringify(v)) }
     const s = await host.evaluate(() => __shop.state() && __shop.state().stats)
     if (!shotGame && s && s.linesDone >= 1) {
       shotGame = true
@@ -162,9 +171,8 @@ for (const [bname, bt] of [['chromium', chromium], ['webkit', webkit]]) {
   const misses = Object.values(log).flat().filter(x => x === 'miss').length
   console.log(`   操作: ホスト ${did('host').join(',')}`)
   console.log(`         横 ${did('g1').join(',')}  縦 ${did('g2').join(',')}  外れ ${misses}`)
-  check(did('host').includes('take') && did('host').includes('put'), `${bname}: ホストが照準で 取る・焼く ができた`)
-  check([...did('host'), ...did('g1'), ...did('g2')].includes('serve'), `${bname}: 客に渡せた`)
-  check([...did('host'), ...did('g1'), ...did('g2')].includes('pay'), `${bname}: 会計できた`)
+  const all = [...did('host'), ...did('g1'), ...did('g2')].join('/')
+  for (const l of ['麺を茹でる', 'スープを入れる', '麺を盛る', 'ネギをのせる', '出す', '下げる', '洗う', '会計する']) check(all.includes(l), `${bname}: 照準で「${l}」ができた`)
   check(misses <= 6, `${bname}: 照準の外れが少ない（${misses}回）`)
   for (const p of [host, g1, g2]) await p.waitForSelector('#result:not([hidden])', { timeout: 30000 })
   const prof = await Promise.all([host, g1, g2].map(p => p.textContent('#rProfit')))

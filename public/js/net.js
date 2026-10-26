@@ -1,6 +1,6 @@
 // 通信の口。online() は WebSocket でサーバーへ、local() はブラウザの中の部屋へつなぐ。どちらも send と onMessage だけ。
 import { Rooms } from '../shared/rooms.js'
-import { SHOP, LOCATIONS, PHASES, UPGRADES } from '../shared/shops/prototype.js'
+import { SHOP } from '../shared/shops/ramen.js'
 const KEY = 'shop-session'
 
 export function online({ onMessage, onStatus }) {
@@ -41,7 +41,7 @@ export function online({ onMessage, onStatus }) {
 export function local({ onMessage, onStatus }) {
   let rooms
   const deliver = (_id, m) => { const s = JSON.stringify(m); queueMicrotask(() => onMessage(JSON.parse(s))) }
-  rooms = new Rooms({ shop: SHOP, locations: LOCATIONS, phases: PHASES, upgrades: UPGRADES, send: deliver })
+  rooms = new Rooms({ shop: SHOP, send: deliver })
   const me = rooms.newSession().id
   let last = performance.now(), paused = false
   // ひとりのときはメニューを開くと営業の時間も止まる

@@ -1,9 +1,10 @@
 // 営業中の画面。一人称で歩き、照準の先の物を「使う」。部屋（サーバーかブラウザ内）から届く状態を描く。
 // 自分の位置はこの画面で動かして送る（遅れなく歩ける）。客と他の店員は届いた状態を少し遅らせて補間する。
 import * as THREE from '../vendor/three.module.js'
-import { SIM, actionFor, obstacles, collide, bakeLabel, stationSize } from '../shared/sim.js'
-import { SHOP, PHASES, LOCATIONS } from '../shared/shops/prototype.js'
-import { buildShop, itemMesh, paintItem, personMesh, setMood, makeBubble, makeGauge, drawIcon, textPlane } from './world.js'
+import { SIM, actionFor, obstacles, collide, stationSize, stationDefs } from '../shared/sim.js'
+import { SHOP, PHASES } from '../shared/shops/ramen.js'
+import { buildShop, personMesh, setMood, makeBubble, textPlane } from './world.js'
+import * as V from './shops/ramen-view.js'
 import { createInput } from './input.js'
 import { sfx, bgm } from './audio.js'
 
@@ -19,12 +20,10 @@ const ICONS = {
   trash: '<svg viewBox="0 0 24 24"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 11v6M12 7.5v.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>'
 }
-const KIND_ICON = { take: 'take', put: 'put', serve: 'serve', pay: 'pay', refill: 'refill', trash: 'trash' }
-const PHASE_NEWS = {
-  lunch: 'お客さんが増える。2品の注文も来る',
-  peak: 'ピーク。「よく焼き」の注文が混ざる',
-  close: '新しいお客さんは来ない。残りを片付けよう'
-}
+ICONS.pour = '<svg viewBox="0 0 24 24"><path d="M4 6h9l-1 3H5zM12 9c3 0 4 3 4 6M16 15v5M5 13h14l-2 7H7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+ICONS.top = '<svg viewBox="0 0 24 24"><path d="M4 14h16l-2 6H6zM8 10c0-2 1-3 2-3M12 10c0-3 1-4 3-4M16 10c0-1.5 .5-2.5 1.5-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+const KIND_ICON = { take: 'take', put: 'put', serve: 'serve', pay: 'pay', refill: 'refill', trash: 'trash', pour: 'pour', top: 'top' }
+const PHASE_NEWS = Object.fromEntries(PHASES.map(p => [p.id, p.news]))
 
 export function createGame({ quality, onLeave }) {
   const canvas = $('#cv')
@@ -48,21 +47,17 @@ export function createGame({ quality, onLeave }) {
     camera.rotation.order = 'YXZ'
     scene.add(camera)
     const ups = room.opts.upgrades || {}
-    const shop = buildShop(scene, SHOP, ups, quality)
+    const shop = buildShop(scene, SHOP, ups, quality, V)
     const hl = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xffd23f, depthTest: false, transparent: true }))
     hl.renderOrder = 9; hl.visible = false; scene.add(hl)
     const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 12), new THREE.MeshBasicMaterial({ color: 0xffd23f, depthTest: false }))
     arrow.rotation.x = Math.PI; arrow.renderOrder = 9; arrow.visible = false; scene.add(arrow)
     const hand = new THREE.Group(); hand.position.set(0.24, -0.3, -0.75); hand.scale.setScalar(0.62); camera.add(hand)
-    const gauges = {}
-    for (const [id, g] of Object.entries(shop.stations)) {
-      const st = SHOP.stations.find(s => s.id === id)
-      if (st.type === 'oven' || st.type === 'drinker') {
-        const gg = makeGauge(0.95); gg.mesh.position.set(0, stationSize(st)[2] + 0.22, 0.2); gg.mesh.visible = false; g.add(gg.mesh); gauges[id] = gg
-      }
-    }
+    const defs = Object.fromEntries(stationDefs(SHOP, ups).map(d => [d.id, d]))
+    // 食べている客の前に置く丼（見た目だけ）
+    const eatBowls = SHOP.layout.spots.map(([x]) => { const b = V.itemMesh('bowl'); V.paintItem(b, { type: 'bowl', soup: true, noodle: 8, top: ['negi', 'chashu'] }); b.position.set(x, 1.01, 1.25); b.visible = false; scene.add(b); return b })
     G = {
-      scene, camera, shop, hl, arrow, hand, gauges, send, solo, you, room, hints,
+      scene, camera, shop, hl, arrow, hand, defs, eatBowls, send, solo, you, room, hints,
       obs: obstacles(SHOP, ups), area: SHOP.layout.staffArea, speedMul: ups.shoes ? SIM.shoesMul : 1,
       snaps: [], s: null, me: null, poseAcc: 0, items: new Map(), custs: new Map(), staff: new Map(), handItem: null,
       target: null, action: null, seq: 0, lastT: performance.now(), hudAcc: 1, feed: [], menu: false, stepAcc: 0,
@@ -75,7 +70,7 @@ export function createGame({ quality, onLeave }) {
     $('#feed').replaceChildren()
     bgm(true, 0)
     resize()
-    showBanner('開店', 'お客さんの注文を作って渡そう', 2600)
+    showBanner('開店', PHASES[0].news, 2600)
     G.raf = requestAnimationFrame(frame)
     // e2e 用の窓口
     window.__shop = {
@@ -122,22 +117,29 @@ export function createGame({ quality, onLeave }) {
     const mine = e.by === G.you
     switch (e.type) {
       case 'order': sfx.order(); break
-      case 'baked': sfx.baked(); break
-      case 'burnt': sfx.burnt(); feed('パンが焦げそう', 'warn'); break
-      case 'brewed': sfx.brewed(); break
+      case 'boiled': if (e.kind === 'normal') sfx.boiled(); else sfx.tick(); break
+      case 'nobi': sfx.burnt(); break
+      case 'plate': sfx.plate(); break
+      case 'pour': if (mine) sfx.pour(); break
+      case 'flavor': if (mine) sfx.drip(); break
+      case 'top': if (mine) sfx.chop(); break
+      case 'washed': sfx.clink(); break
       case 'take': if (mine) sfx.pick(); break
       case 'put': if (mine) sfx.put(); break
-      case 'refill': sfx.refill(); feed(`${who(e.by)}が生地を補充`); break
+      case 'refill': sfx.refill(); break
       case 'trash': if (mine) sfx.trash(); break
-      case 'serve': sfx.serve(e.q); feed(`${who(e.by)}が渡した（品質${e.q}）`, e.q >= 80 ? 'good' : e.q < 50 ? 'warn' : ''); break
-      case 'pay': sfx.pay(); feed(e.auto ? `自分で払って帰った +¥${e.amount}` : `会計 +¥${e.amount}${e.tip ? `（チップ¥${e.tip}）` : ''}`, e.auto ? 'warn' : 'good'); break
+      case 'serve': sfx.serve(e.q); feed(`${who(e.by)}が出した（${e.q}点）`, e.q >= 80 ? 'good' : e.q < 50 ? 'warn' : ''); break
+      case 'pay': sfx.pay(); feed(e.auto ? `自分で払って帰った +¥${e.amount}` : `会計 +¥${e.amount}${e.tip ? `（心づけ¥${e.tip}）` : ''}`, e.auto ? 'warn' : 'good'); break
       case 'angry': sfx.angry(); feed('待ちきれず帰った', 'bad'); break
       case 'impatient': if (e.mood === 'angry') sfx.impatient(); break
       case 'turned': feed('満席で入れなかった', 'bad'); break
-      case 'stockout': feed('生地箱が空。材料の箱を運ぼう', 'warn'); sfx.impatient(); break
-      case 'phase': sfx.phase(); showBanner(e.name, PHASE_NEWS[e.phase] || '', 3200); break
+      case 'stockout': case 'nobowl': sfx.impatient(); break
+      case 'arrive': sfx.door(); break
+      case 'phase': sfx.phase(); showBanner(e.name, PHASE_NEWS[e.phase] || '', 3400); break
       case 'close': sfx.close(); break
     }
+    const f = V.feedFor(e, who)
+    if (f) feed(f[0], f[1])
     void s
   }
   const who = id => id === G.you ? 'あなた' : (G.s?.players[id]?.name || '仲間')
@@ -190,10 +192,8 @@ export function createGame({ quality, onLeave }) {
     else {
       const sid = k === 'it' ? s.items[id]?.at[1] : id
       const st = s.stations[sid]; if (!st) return false
-      const def = SHOP.stations.find(d => d.id === sid)
       ;[x, z] = [st.x, st.z]; y = 0.95
       if (k === 'it') { const p = itemWorld(s.items[id]); if (p) { x = p.x; y = p.y; z = p.z } }
-      void def
     }
     // 立つ場所: 物から厨房の内側へ 1.1m
     const sx = Math.max(G.area[0] + 0.4, Math.min(G.area[2] - 0.4, x))
@@ -210,15 +210,9 @@ export function createGame({ quality, onLeave }) {
   // ---- 位置の計算
   const tmpV = new THREE.Vector3()
   function itemWorld(it) {
-    if (!it) return null
-    if (it.at[0] === 'st') {
-      const st = SHOP.stations.find(s => s.id === it.at[1])
-      if (!st) return null
-      if (st.type === 'oven') return { x: st.x, y: 0.4, z: st.z + 0.12 }
-      if (st.type === 'drinker') return { x: st.x, y: 0.35, z: st.z + 0.1 }
-      if (st.type === 'table') { const [sx, sz] = st.slots[it.at[2]]; return { x: st.x + sx, y: 0.9, z: st.z + sz } }
-    }
-    return null
+    if (!it || it.at[0] !== 'st') return null
+    const def = G.defs[it.at[1]]
+    return def ? V.itemPos({ ...def, slotsN: G.s?.stations[def.id]?.slots?.length }, it, SHOP) : null
   }
 
   function sampleAt(t) {
@@ -277,7 +271,7 @@ export function createGame({ quality, onLeave }) {
     drawStaff(smp, dt)
     drawCustomers(smp, dt)
     drawItems(s)
-    drawStations(s, now)
+    drawStations(s, dt)
     pickTarget(s)
     G.hudAcc += dt
     if (G.hudAcc > 0.1) { G.hudAcc = 0; drawHud(s) }
@@ -354,7 +348,7 @@ export function createGame({ quality, onLeave }) {
     b.sprite.visible = show
     if (!show) return
     const f = Math.min(1, c.wait / c.patience)
-    const key = c.st + c.order.map(l => l.p + (l.opt || '') + (l.done ? 1 : 0)).join() + Math.round(f * 24) + c.mood
+    const key = c.st + c.order.map(l => V.lineTags(l).join() + (l.done ? 1 : 0)).join() + Math.round(f * 24) + c.mood
     if (b.key === key) return
     b.key = key
     const g = b.canvas.getContext('2d'), W = 320, H = 200
@@ -364,25 +358,27 @@ export function createGame({ quality, onLeave }) {
     g.beginPath(); g.roundRect(6, 6, W - 12, H - 44, 26); g.fill(); g.stroke()
     g.beginPath(); g.moveTo(W / 2 - 18, H - 40); g.lineTo(W / 2, H - 14); g.lineTo(W / 2 + 18, H - 40); g.closePath(); g.fill(); g.stroke()
     if (c.st === 'pay') {
-      drawIcon(g, 'pay', W / 2 - 60, 70, 70)
+      V.PAY_ICON(g, W / 2 - 60, 70, 70)
       g.fillStyle = '#3b2f25'; g.font = '800 34px "Hiragino Sans",system-ui'; g.textAlign = 'left'; g.textBaseline = 'middle'
       g.fillText('会計', W / 2 - 10, 72)
     } else if (c.st === 'queue') {
       g.fillStyle = '#3b2f25'; g.font = '800 34px "Hiragino Sans",system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'
       g.fillText('順番待ち', W / 2, 70)
     } else {
-      const n = c.order.length, cell = Math.min(92, (W - 40) / n)
-      c.order.forEach((l, i) => {
-        const cx = W / 2 + (i - (n - 1) / 2) * cell
-        g.globalAlpha = l.done ? 0.3 : 1
-        drawIcon(g, l.p, cx, 62, cell * 0.8, l.opt)
-        if (l.opt === 'well') {
-          g.fillStyle = '#b5401f'; g.beginPath(); g.roundRect(cx - 34, 92, 68, 26, 8); g.fill()
-          g.fillStyle = '#fff'; g.font = '800 19px "Hiragino Sans",system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('よく焼き', cx, 106)
-        }
-        g.globalAlpha = 1
-        if (l.done) { g.strokeStyle = '#2f9e44'; g.lineWidth = 9; g.beginPath(); g.moveTo(cx - 22, 62); g.lineTo(cx - 6, 78); g.lineTo(cx + 24, 42); g.stroke() }
-      })
+      // 丼の絵と、指定（硬め・濃いめ・トッピングなど）。普通の1杯なら「ラーメン」
+      const l = c.order[0], tags = V.lineTags(l)
+      V.drawBowlIcon(g, tags.length ? 62 : W / 2 - 50, 66, 84, l)
+      g.fillStyle = '#3b2f25'; g.textBaseline = 'middle'
+      if (!tags.length) { g.font = '800 36px "Hiragino Sans",system-ui'; g.textAlign = 'left'; g.fillText('ラーメン', W / 2 - 4, 68) }
+      else {
+        const fs = tags.length > 3 ? 21 : 26
+        g.font = `800 ${fs}px "Hiragino Sans",system-ui`; g.textAlign = 'left'
+        tags.forEach((t, i) => {
+          const y = 40 + i * (fs + 6) - (tags.length > 3 ? 6 : 0)
+          g.fillStyle = t.startsWith('+') ? '#b5401f' : '#2c5a8a'; g.fillText(t, 112, y)
+        })
+      }
+      if (l.done) { g.strokeStyle = '#2f9e44'; g.lineWidth = 10; g.beginPath(); g.moveTo(40, 66); g.lineTo(60, 86); g.lineTo(96, 40); g.stroke() }
     }
     // 待ち時間（残りが減ると色が変わる）
     if (c.st !== 'pay') {
@@ -408,16 +404,16 @@ export function createGame({ quality, onLeave }) {
     const seen = new Set()
     for (const it of Object.values(s.items)) {
       seen.add(it.id)
-      const fam = it.type === 'dough' || it.type === 'bread' ? 'bread' : it.type === 'cup' || it.type === 'drink' ? 'cup' : it.type
+      const fam = it.type === 'dirty' ? 'bowl' : it.type
       let o = G.items.get(it.id)
       if (!o || o.fam !== fam) {
         if (o) o.mesh.parent?.remove(o.mesh)
-        const mesh = itemMesh(it.type)
+        const mesh = V.itemMesh(it.type)
         mesh.traverse(m => { if (m.isMesh) m.userData.target = { k: 'it', id: it.id } })
         o = { mesh, fam }
         G.items.set(it.id, o)
       }
-      paintItem(o.mesh, it, SHOP)
+      V.paintItem(o.mesh, it)
       if (it.at[0] === 'pl') {
         if (it.at[1] === G.you) {
           if (o.mesh.parent !== G.hand) { G.hand.add(o.mesh); o.mesh.position.set(0, 0, 0); o.mesh.rotation.set(0.25, -0.4, 0) }
@@ -435,36 +431,11 @@ export function createGame({ quality, onLeave }) {
     for (const [id, o] of G.items) if (!seen.has(id)) { o.mesh.parent?.remove(o.mesh); G.items.delete(id) }
   }
 
-  function drawStations(s, now) {
-    const B = SHOP.bake
-    for (const [id, g] of Object.entries(G.shop.stations)) {
-      const st = s.stations[id]
-      if (!st) continue
-      if (st.type === 'oven') {
-        const it = st.slots[0] && s.items[st.slots[0]]
-        const win = g.userData.window
-        win.material.emissiveIntensity = it ? 0.8 + Math.sin(now / 200) * 0.15 : 0
-        const gg = G.gauges[id]
-        gg.mesh.visible = !!it
-        if (it) {
-          const max = B.burnt + 3
-          const key = Math.round(it.cook * 10)
-          if (gg.key !== key) { gg.key = key; gg.draw([[B.windows.normal[0], B.windows.normal[1], '#3fae5a'], [B.windows.well[0], B.windows.well[1], '#e08a2e'], [B.burnt, max, '#c9302c']], it.cook, max) }
-          gg.mesh.quaternion.copy(G.camera.quaternion)
-        }
-      } else if (st.type === 'drinker') {
-        const it = st.slots[0] && s.items[st.slots[0]]
-        const gg = G.gauges[id]
-        gg.mesh.visible = !!it && it.type === 'cup'
-        if (gg.mesh.visible) {
-          const key = Math.round((it.fill || 0) * 40)
-          if (gg.key !== key) { gg.key = key; gg.draw([[0, it.fill || 0, '#4fa3e0']], it.fill || 0, 1) }
-          gg.mesh.quaternion.copy(G.camera.quaternion)
-        }
-      } else if (st.type === 'doughbox') {
-        g.userData.balls.forEach((b, i) => (b.visible = i < st.stock))
-      }
-    }
+  function drawStations(s, dt) {
+    for (const [id, g] of Object.entries(G.shop.stations)) { const st = s.stations[id]; if (st) V.updateStation(g, st, s, dt, G.camera) }
+    // 食べている客の前の丼
+    const eating = new Set(s.customers.filter(c => c.st === 'eat').map(c => SHOP.layout.spots.findIndex(([x]) => Math.abs(x - c.x) < 0.05)))
+    G.eatBowls.forEach((b, i) => (b.visible = eating.has(i)))
   }
 
   // 照準の先（真ん中の光線が当たった物。当たらなければ近い向きの物）
@@ -500,7 +471,7 @@ export function createGame({ quality, onLeave }) {
         const sc = ang + d * 0.03 + (a.none ? 0.2 : 0)
         if (sc < bs) { bs = sc; alt = { t, a, obj } }
       }
-      for (const [id, g] of Object.entries(G.shop.stations)) { const st = SHOP.stations.find(x => x.id === id); tryT({ k: 'st', id }, g, st.x, stationSize(st)[2] * 0.8, st.z) }
+      for (const [id, g] of Object.entries(G.shop.stations)) { const st = G.defs[id]; tryT({ k: 'st', id }, g, st.x, stationSize(st, SHOP)[2] * 0.8, st.z) }
       for (const [id, o] of G.items) if (o.mesh.parent === G.scene) tryT({ k: 'it', id }, o.mesh, o.mesh.position.x, o.mesh.position.y + 0.1, o.mesh.position.z)
       for (const [id, o] of G.custs) tryT({ k: 'cu', id }, o.mesh, o.mesh.position.x, 1.3, o.mesh.position.z)
       if (alt) best = alt
@@ -511,7 +482,7 @@ export function createGame({ quality, onLeave }) {
       const bb = new THREE.Box3().setFromObject(best.obj, true)
       // 頭の上の札は枠に入れない
       if (G.target.k === 'cu') bb.max.y = Math.min(bb.max.y, 1.9)
-      if (G.target.k === 'st') bb.max.y = Math.min(bb.max.y, stationSize(SHOP.stations.find(x => x.id === G.target.id))[2] + 0.05)
+      if (G.target.k === 'st') bb.max.y = Math.min(bb.max.y, stationSize(G.defs[G.target.id], SHOP)[2] + 0.05)
       bb.getCenter(G.hl.position); bb.getSize(G.hl.scale); G.hl.scale.addScalar(0.06)
       G.hl.visible = true
       G.hl.material.color.set(G.action.none ? 0x9aa0a6 : 0xffd23f)
@@ -535,7 +506,7 @@ export function createGame({ quality, onLeave }) {
     bgm(true, s.phase / (PHASES.length - 1))
     // 注文票（厨房から見た並び＝右から左が x の小さい順）
     const os = s.customers.filter(c => c.st === 'order' && c.arrived).sort((a, b) => b.x - a.x)
-    const key = os.map(c => c.id + c.order.map(l => +l.done).join('') + c.mood + Math.round(c.wait / c.patience * 20)).join('|')
+    const key = os.map(c => c.id + c.mood + Math.round(c.wait / c.patience * 20)).join('|')
     if (key !== G.orderKey) {
       G.orderKey = key
       $('#orders').replaceChildren(...os.map(c => {
@@ -544,10 +515,10 @@ export function createGame({ quality, onLeave }) {
         const icons = document.createElement('div'); icons.className = 'ticket-icons'
         for (const l of c.order) {
           const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64
-          const g = cv.getContext('2d'); if (l.done) g.globalAlpha = 0.25
-          drawIcon(g, l.p, 32, 32, 54, l.opt)
-          const w = document.createElement('span'); w.className = 'ti' + (l.done ? ' done' : '') + (l.opt === 'well' ? ' well' : '')
-          w.append(cv); icons.append(w)
+          V.drawBowlIcon(cv.getContext('2d'), 32, 30, 56, l)
+          const w = document.createElement('span'); w.className = 'ti'; w.append(cv); icons.append(w)
+          const tags = V.lineTags(l)
+          if (tags.length) { const tg = document.createElement('span'); tg.className = 'tags'; for (const t of tags) { const e = document.createElement('b'); e.textContent = t; if (t.startsWith('+')) e.className = 'add'; tg.append(e) } icons.append(tg) }
         }
         const bar = document.createElement('i'); bar.style.width = `${Math.max(0, 100 - c.wait / c.patience * 100)}%`
         const barW = document.createElement('div'); barW.className = 'ticket-bar'; barW.append(bar)
@@ -575,49 +546,26 @@ export function createGame({ quality, onLeave }) {
     const hb = $('#held')
     if (it) {
       hb.hidden = false
-      let t = SHOP.items[it.type].name
-      if (it.type === 'bread') t += `（${bakeLabel(SHOP, it.cook || 0)}）`
-      if (it.type === 'cup' && it.fill > 0) t += '（途中）'
+      const t = V.heldLabel(it)
       hb.textContent = t
     } else hb.hidden = true
     // 案内（はじめの営業だけ）
-    const h = G.hints ? hintFor(s, p, it) : null
+    const h = G.hints ? V.hint(s, p, it) : null
     $('#hint').hidden = !h
     if (h) $('#hint').textContent = h.text
     let tgt = h && h.at
     // 近くまで来たら矢印は消す（照準の枠で足りる）
     if (tgt) {
-      const st = tgt.k === 'st' ? SHOP.stations.find(x => x.id === tgt.id) : s.customers.find(c => c.id === tgt.id)
+      const st = tgt.k === 'st' ? G.defs[tgt.id] : tgt.k === 'it' ? (() => { const p = itemWorld(s.items[tgt.id]); return p && { x: p.x, z: p.z } })() : s.customers.find(c => c.id === tgt.id)
       if (!st || Math.hypot(st.x - G.me.x, st.z - G.me.z) < 2.4) tgt = null
     }
     G.arrow.visible = !!tgt
     if (tgt) {
-      if (tgt.k === 'st') { const st = SHOP.stations.find(x => x.id === tgt.id); G.arrow.position.set(st.x, stationSize(st)[2] + 0.35 + Math.sin(performance.now() / 180) * 0.06, st.z) }
+      const bob = Math.sin(performance.now() / 180) * 0.06
+      if (tgt.k === 'st') { const st = G.defs[tgt.id]; G.arrow.position.set(st.x, stationSize(st, SHOP)[2] + 0.35 + bob, st.z) }
+      else if (tgt.k === 'it') { const p = itemWorld(s.items[tgt.id]); if (p) G.arrow.position.set(p.x, p.y + 0.45 + bob, p.z) }
       else { const c = s.customers.find(c => c.id === tgt.id); if (c) G.arrow.position.set(c.x, 2.0, c.z) }
     }
-  }
-
-  function hintFor(s, p, it) {
-    if (!p) return null
-    const B = SHOP.bake
-    const wants = type => s.customers.find(c => c.st === 'order' && c.arrived && c.order.some(l => !l.done && l.p === type))
-    const ovens = Object.values(s.stations).filter(x => x.type === 'oven')
-    if (it) {
-      if (it.type === 'dough') { const o = ovens.find(o => !o.slots[0]); return { text: 'オーブンに入れて焼こう', at: o && { k: 'st', id: o.id } } }
-      if (it.type === 'bread') { const c = wants('bread'); return c ? { text: '注文したお客さんに渡そう（カウンター越し）', at: { k: 'cu', id: c.id } } : { text: '作業台に置いておける', at: { k: 'st', id: 'island' } } }
-      if (it.type === 'cup') return { text: 'ドリンク機に置こう', at: { k: 'st', id: 'drink1' } }
-      if (it.type === 'drink') { const c = wants('drink'); return c ? { text: 'ドリンクを注文したお客さんに渡そう', at: { k: 'cu', id: c.id } } : { text: '作業台に置いておける', at: { k: 'st', id: 'island' } } }
-      if (it.type === 'crate') return { text: '生地箱に入れて補充しよう', at: { k: 'st', id: 'dough' } }
-    }
-    if (s.customers.some(c => c.st === 'pay' && c.payIdx === 0 && c.arrived)) return { text: 'レジで会計しよう', at: { k: 'st', id: 'register' } }
-    for (const o of ovens) { const b = o.slots[0] && s.items[o.slots[0]]; if (b && b.cook >= B.windows.normal[0]) return { text: '焼けた。緑の間に取り出そう（よく焼きはオレンジ）', at: { k: 'st', id: o.id } } }
-    for (const o of ovens) if (o.slots[0]) return { text: '焼けるのを待つ間に、ほかの注文を', at: null }
-    const d = s.stations.drink1; if (d?.slots[0] && s.items[d.slots[0]]?.type === 'drink') return { text: 'ドリンクができた。取ろう', at: { k: 'st', id: 'drink1' } }
-    if (s.stations.dough.stock === 0) return { text: '生地がない。右奥の材料の箱を生地箱へ', at: { k: 'st', id: 'crates' } }
-    if (wants('bread') && ovens.some(o => !o.slots[0])) return { text: '左の生地箱から生地を取ろう', at: { k: 'st', id: 'dough' } }
-    if (wants('drink')) return { text: '奥のカップを取ろう', at: { k: 'st', id: 'cups' } }
-    if (!s.customers.length) return { text: 'お客さんを待とう', at: null }
-    return null
   }
 
   return { start, stop, onSnap, onActr, get running() { return !!G } }

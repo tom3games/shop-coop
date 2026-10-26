@@ -63,26 +63,35 @@ export const sfx = {
   phase() { [523, 659, 784].forEach((f, i) => tone(f, 0.22, { type: 'square', vol: 0.07, at: i * 0.1 })) },
   close() { [784, 659, 523, 392].forEach((f, i) => tone(f, 0.3, { type: 'triangle', vol: 0.12, at: i * 0.16 })) },
   win() { [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, 0.3, { type: 'triangle', vol: 0.12, at: i * 0.11 })) },
-  step() { noise(0.04, 0.04, 300 + Math.random() * 200, { type: 'lowpass' }) }
+  step() { noise(0.04, 0.04, 300 + Math.random() * 200, { type: 'lowpass' }) },
+  // ラーメン屋の音
+  boiled() { tone(1568, 0.09, { type: 'square', vol: 0.06 }); tone(1568, 0.09, { type: 'square', vol: 0.06, at: 0.14 }); tone(2093, 0.18, { type: 'square', vol: 0.06, at: 0.28 }) },
+  tick() { tone(1318, 0.06, { type: 'square', vol: 0.04 }) },
+  plate() { noise(0.35, 0.22, 900); noise(0.2, 0.12, 2400, { at: 0.08 }); tone(220, 0.12, { vol: 0.06, at: 0.05 }) },
+  pour() { noise(0.45, 0.16, 600, { type: 'lowpass' }); tone(330, 0.3, { type: 'sine', vol: 0.04, to: 260 }) },
+  drip() { tone(900, 0.06, { type: 'sine', vol: 0.1, to: 500 }); tone(820, 0.06, { type: 'sine', vol: 0.08, at: 0.1, to: 450 }) },
+  chop() { for (let i = 0; i < 3; i++) noise(0.03, 0.18, 3000, { at: i * 0.07, type: 'highpass' }) },
+  clink() { tone(2637, 0.15, { type: 'sine', vol: 0.06 }); tone(3136, 0.2, { type: 'sine', vol: 0.05, at: 0.05 }) },
+  door() { tone(1046, 0.4, { type: 'sine', vol: 0.06 }); tone(784, 0.5, { type: 'sine', vol: 0.06, at: 0.18 }) }
 }
 
-// BGM: 軽いボサノバ風の刻み。忙しくなるとテンポが上がる
-const CH = [[220, 277, 330], [196, 247, 294], [175, 220, 262], [196, 247, 330]]
-export function bgm(on, busy = 0) { bgmOn = on; tempo = 96 + busy * 26 }
+// BGM: ヨナ抜き音階の三味線ふうの刻みと太鼓。忙しくなるとテンポが上がる
+const SCALE = [220, 247, 277, 330, 370, 440, 494, 554, 659]
+const MEL = [5, 4, 3, 4, 5, -1, 3, 2, 3, 2, 1, -1, 0, 1, 3, -1, 4, 5, 6, 5, 4, -1, 3, 4, 3, 2, 1, -1, 2, 1, 0, -1]
+export function bgm(on, busy = 0) { bgmOn = on; tempo = 92 + busy * 30 }
 function schedule() {
   if (!ctx || !bgmOn || muted || document.hidden) { if (ctx) nextT = ctx.currentTime + 0.05; return }
-  const s16 = 60 / tempo / 4
+  const s8 = 60 / tempo / 2
   if (nextT < ctx.currentTime) nextT = ctx.currentTime + 0.05
   while (nextT < ctx.currentTime + 0.2) {
-    const i = step++ % 64, bar = Math.floor(i / 16), n = i % 16
+    const i = step++ % 32
     const at = nextT - ctx.currentTime
-    const ch = CH[bar]
-    if (n === 0 || n === 10) tone(ch[0] / 2, 0.35, { type: 'sine', vol: 0.22, at, dest: music })
-    if (n === 6 || n === 14) tone(ch[0] / 2 * 1.5, 0.25, { type: 'sine', vol: 0.15, at, dest: music })
-    if ([3, 6, 10, 13].includes(n)) for (const f of ch) tone(f, 0.16, { type: 'triangle', vol: 0.035, at, dest: music })
-    if (n % 2 === 0) noise(0.03, 0.05, 7000, { at, type: 'highpass', dest: music })
-    if (n === 4 || n === 12) noise(0.06, 0.06, 2500, { at, dest: music })
-    nextT += s16
+    const n = MEL[i]
+    if (n >= 0) { const f = SCALE[n]; tone(f, 0.28, { type: 'triangle', vol: 0.07, at, dest: music }); tone(f * 2, 0.06, { type: 'square', vol: 0.015, at, dest: music }) }
+    if (i % 4 === 0) tone(110, 0.25, { type: 'sine', vol: 0.22, at, to: 70, dest: music })   // 太鼓（ドン）
+    if (i % 8 === 6) noise(0.05, 0.08, 2000, { at, dest: music })                              // 太鼓のふち（カッ）
+    if (i % 2 === 1) noise(0.02, 0.03, 6000, { at, type: 'highpass', dest: music })
+    nextT += s8
   }
 }
 

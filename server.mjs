@@ -6,7 +6,7 @@ import { extname, join, normalize } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { WebSocketServer } from 'ws'
 import { Rooms } from './public/shared/rooms.js'
-import { SHOP, LOCATIONS, PHASES, UPGRADES } from './public/shared/shops/prototype.js'
+import { SHOP } from './public/shared/shops/ramen.js'
 
 const ROOT = fileURLToPath(new URL('./public/', import.meta.url))
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json', '.ico': 'image/x-icon' }
@@ -16,7 +16,7 @@ const MAX_PER_SEC = 60 // 1接続あたりの送信の上限（位置 20回/秒 
 export function startServer({ port = Number(process.env.PORT) || 8110, quiet = false } = {}) {
   const sockets = new Map()
   const rooms = new Rooms({
-    shop: SHOP, locations: LOCATIONS, phases: PHASES, upgrades: UPGRADES,
+    shop: SHOP,
     send: (id, msg) => { const ws = sockets.get(id); if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)) }
   })
 

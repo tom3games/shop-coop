@@ -3,13 +3,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import WebSocket from 'ws'
 import { Rooms, ROOM } from '../public/shared/rooms.js'
-import { SHOP, LOCATIONS, PHASES, UPGRADES } from '../public/shared/shops/prototype.js'
+import { SHOP } from '../public/shared/shops/ramen.js'
 import { startServer } from '../server.mjs'
 
 function setup() {
   let t = 0
   const box = new Map()
-  const rooms = new Rooms({ shop: SHOP, locations: LOCATIONS, phases: PHASES, upgrades: UPGRADES, now: () => t, send: (id, m) => { if (!box.has(id)) box.set(id, []); box.get(id).push(m) } })
+  const rooms = new Rooms({ shop: SHOP, now: () => t, send: (id, m) => { if (!box.has(id)) box.set(id, []); box.get(id).push(m) } })
   const s = () => { const id = rooms.newSession().id; rooms.hello(id); return id }
   const last = (id, type) => [...(box.get(id) || [])].reverse().find(m => m.t === type)
   return { rooms, s, last, box, adv: ms => { t += ms; rooms.tick(ms) } }
@@ -49,10 +49,10 @@ test('開始の設定は検証する（知らない設備・場所・極端な�
   const { rooms, s, last } = setup()
   const a = s()
   rooms.handle(a, { t: 'create', name: 'A' })
-  rooms.handle(a, { t: 'start', opts: { location: 'moon', upgrades: { oven2: true, hack: true, shoes: 'yes' }, duration: 1 } })
+  rooms.handle(a, { t: 'start', opts: { location: 'moon', upgrades: { boiler2: true, hack: true, shoes: 'yes' }, duration: 1 } })
   const o = last(a, 'room').opts
   assert.equal(o.location, 'residential')
-  assert.deepEqual(o.upgrades, { oven2: true })
+  assert.deepEqual(o.upgrades, { boiler2: true })
   assert.equal(o.duration, 30)
 })
 
@@ -111,13 +111,13 @@ test('本物のサーバーで2人つないで、作成→参加→開始→操�
   A.send({ t: 'start' })
   await wait(B, m => m.t === 'snap')
   // A が生地箱の前に立って生地を取る → B の画面に A が持っている状態が届く
-  A.send({ t: 'pose', p: { x: -5.3, z: -1.6, yaw: -Math.PI / 2, pitch: 0 } })
+  A.send({ t: 'pose', p: { x: -5.3, z: -2.6, yaw: -Math.PI / 2, pitch: 0 } })
   await new Promise(r => setTimeout(r, 150))
-  A.send({ t: 'act', target: { k: 'st', id: 'dough' }, seq: 1 })
+  A.send({ t: 'act', target: { k: 'st', id: 'noodles' }, seq: 1 })
   const r = await wait(A, m => m.t === 'actr' && m.seq === 1)
   assert.ok(r.ok, JSON.stringify(r))
   const snap = await wait(B, m => m.t === 'snap' && m.s.players[wa.id]?.hold)
-  assert.equal(snap.s.items[snap.s.players[wa.id].hold].type, 'dough')
+  assert.equal(snap.s.items[snap.s.players[wa.id].hold].type, 'noodle')
   // 壊れた JSON と大きすぎる送信でサーバーが落ちない
   A.ws.send('{oops')
   A.send({ t: 'act', target: { k: 'st', id: 'x'.repeat(5000) } })

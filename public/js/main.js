@@ -2,7 +2,7 @@
 import { online, local } from './net.js'
 import { createGame } from './game.js'
 import { load, save } from './save.js'
-import { LOCATIONS, UPGRADES, SHOP } from '../shared/shops/prototype.js'
+import { LOCATIONS, UPGRADES, SHOP } from '../shared/shops/ramen.js'
 import { setMuted, isMuted, ICON_ON, ICON_OFF, unlock, sfx } from './audio.js'
 
 const $ = s => document.querySelector(s)
@@ -141,7 +141,7 @@ function showResult(r, isHost) {
   const { best: prevBest, isBest } = showResult.last || {}
   bestText = prevBest == null ? 'はじめての記録' : isBest ? `自己ベスト更新（前回まで ¥${prevBest.toLocaleString()}）` : `自己ベスト ¥${prevBest.toLocaleString()}（あと ¥${(prevBest - r.profit).toLocaleString()}）`
   $('#rLoc').textContent = `${r.location}の営業`
-  const grade = r.satisfaction >= 80 ? '大繁盛' : r.satisfaction >= 60 ? '上出来' : r.satisfaction >= 40 ? 'なんとか' : 'てんやわんや'
+  const grade = r.satisfaction >= 80 ? '行列店' : r.satisfaction >= 60 ? '繁盛店' : r.satisfaction >= 40 ? 'なんとか' : 'てんやわんや'
   $('#rTitle').textContent = grade
   $('#rTitle').dataset.g = r.satisfaction >= 60 ? 'good' : r.satisfaction >= 40 ? 'mid' : 'bad'
   $('#rProfit').textContent = `¥${r.profit.toLocaleString()}`
@@ -150,8 +150,8 @@ function showResult(r, isHost) {
   const cell = (k, v) => { const d = document.createElement('div'); d.innerHTML = '<small></small><b></b>'; d.querySelector('small').textContent = k; d.querySelector('b').textContent = v; return d }
   $('#rGrid').replaceChildren(
     cell('売上', `¥${r.sales.toLocaleString()}`), cell('材料費', `¥${r.cost.toLocaleString()}`),
-    cell('来た客', `${r.customers}人`), cell('会計まで', `${r.served}人`),
-    cell('成功率', `${r.success}%`), cell('平均品質', `${r.quality}`),
+    cell('来た客', `${r.customers}人`), cell('出した杯数', `${r.linesDone}杯`),
+    cell('成功率', `${r.success}%`), cell('一杯の出来', `${r.quality}点`),
     cell('満足度', `${r.satisfaction}`), cell('怒って帰った', `${r.angry + r.turned}人`)
   )
   $('#againBtn').hidden = !isHost
@@ -197,7 +197,7 @@ $('#toTitleBtn').onclick = () => leaveRoom()
 $('#copyBtn').onclick = async () => {
   const url = $('#invite').value
   try {
-    if (navigator.share && quality.touch) await navigator.share({ title: '仮の店', text: '一緒に店を回そう', url })
+    if (navigator.share && quality.touch) await navigator.share({ title: SHOP.name, text: '一緒にラーメン屋を回そう', url })
     else { await navigator.clipboard.writeText(url); toast('招待URLをコピーしました') }
   } catch { $('#invite').select(); toast('URLを長押ししてコピーしてください') }
 }

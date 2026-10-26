@@ -1,6 +1,6 @@
 // このブラウザだけの記録（名前・店の貯金・買った設備・自己ベスト）。localStorage が使えない環境でも動く
-import { UPGRADES, LOCATIONS, DEFAULT_LOCATION } from '../shared/shops/prototype.js'
-const KEY = 'shop-coop-v1'
+import { UPGRADES, LOCATIONS, DEFAULT_LOCATION } from '../shared/shops/ramen.js'
+const KEY = 'shop-coop-ramen-v1'
 function fresh() { return { name: '', wallet: 0, upgrades: {}, best: {}, shifts: 0, location: DEFAULT_LOCATION } }
 export function load() {
   let p = null

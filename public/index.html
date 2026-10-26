@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>仮の店 ― 友だちと回す一人称の店</title>
-<meta name="description" content="一人称で店員になって、焼く・注ぐ・渡す・会計する。最初はのんびり、ピークは全員で走り回る協力ゲーム。スマホでもPCでも、1〜4人。">
+<title>ラーメン 仮屋 ― 友だちと回す一人称のラーメン屋</title>
+<meta name="description" content="一人称でラーメン屋の店員に。麺を茹でて、スープを張って、盛って出す。硬め・味濃いめ・トッピングの注文がピークに押し寄せる協力ゲーム。スマホでもPCでも1〜4人。">
 <meta property="og:type" content="website">
-<meta property="og:title" content="仮の店 ― 友だちと回す一人称の店">
-<meta property="og:description" content="焼いて、注いで、渡して、会計。ピークは全員で走り回る。1〜4人の協力ゲーム。">
+<meta property="og:title" content="ラーメン 仮屋 ― 友だちと回す一人称のラーメン屋">
+<meta property="og:description" content="麺を茹でて、スープを張って、盛って出す。硬め、味濃いめ、味玉追加。ピークは全員で走り回る。1〜4人の協力ゲーム。">
 <meta property="og:image" content="/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#2b2118">
-<link rel="stylesheet" href="/style.css?v=1">
+<link rel="stylesheet" href="/style.css?v=3">
 <script>
   // 起動に失敗したときに原因を画面に出す（module の読み込み自体が失敗すると中の catch は動かないため、素の script で拾う）
   window.__errs = []
@@ -83,9 +83,9 @@
 <main id="screens">
   <section id="title" class="card wide" hidden>
     <div class="t-col">
-      <p class="eyebrow">一人称の協力店舗ゲーム</p>
-      <h1>仮の店</h1>
-      <p class="lead">焼いて、注いで、渡して、会計。はじめはのんびり、ピークは全員で走り回る。</p>
+      <p class="eyebrow">一人称の協力ラーメン屋</p>
+      <h1>ラーメン 仮屋</h1>
+      <p class="lead">麺を茹でて、スープを張って、盛って出す。はじめは普通の一杯から。ピークは硬め・濃いめ・味玉追加が押し寄せる。</p>
       <label class="field">名前<input id="name" maxlength="12" autocomplete="nickname" placeholder="例: たろう" enterkeyhint="done"></label>
     </div>
     <div class="t-col">
@@ -136,11 +136,11 @@
   <section id="howto" class="card" hidden>
     <h2>遊び方</h2>
     <ol class="how">
-      <li><b>注文を見る</b> 客の頭の上と画面の上に、ほしい物が出る。下の棒が待ってくれる残り時間</li>
-      <li><b>仮パン</b> 左の壁の生地箱から生地を取り、奥のオーブンへ。ゲージが緑の間に取り出す（よく焼きはオレンジ）</li>
-      <li><b>仮ドリンク</b> 奥のカップを取り、ドリンク機に置く。満タンになったら取る</li>
-      <li><b>渡す・会計</b> カウンター越しに客へ渡す。全部そろうと右のレジに並ぶので会計する</li>
-      <li><b>補充</b> 生地箱が空になったら、右奥の材料の箱を生地箱へ運ぶ</li>
+      <li><b>注文</b> 客の頭の上と画面の上に出る。指定（硬め・濃いめ・+味玉など）があれば文字で出る。下の棒は待ってくれる残り</li>
+      <li><b>麺</b> 左の麺の箱から麺を取り、奥の茹で釜へ。ゲージが青＝硬め・緑＝普通・オレンジ＝柔らかめ。赤はのびた麺</li>
+      <li><b>丼</b> 丼置きから丼を取り、寸胴でスープ。濃いめはかえし、油多めは背脂を足す</li>
+      <li><b>盛る</b> スープの入った丼を持って茹で釜を使うと麺が入る。ネギ（と注文のトッピング）をのせてカウンター越しに出す</li>
+      <li><b>片付け</b> 食べ終わった丼を席から下げて洗い場へ。下げるまで次の客は座れない。会計は右のレジ</li>
       <li><b>操作</b> スマホは左で移動・右をなぞって見回す・手のボタンで使う・走るは押すたびに切り替え。PCは WASD・マウス・E</li>
     </ol>
     <button id="howBack" class="ghost">戻る</button>
@@ -148,6 +148,6 @@
 </main>
 <div id="toast" class="toast" role="status" hidden></div>
 
-<script type="module" src="/js/main.js?v=1"></script>
+<script type="module" src="/js/main.js?v=2"></script>
 </body>
 </html>
