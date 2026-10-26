@@ -28,14 +28,15 @@ await host.click('#startBtn')
 await g.waitForFunction(() => window.__shop && window.__shop.state() && window.__shop.me())
 // webkit 側で生地を取ってオーブンに入れる（本物の照準で）
 await g.waitForTimeout(800)
-for (const t of [['st', 'dough'], ['st', 'oven1']]) {
+for (const t of [['st', 'noodles'], ['st', 'boiler1']]) {
   await g.evaluate(t => __shop.aimAt(t[0], t[1]), t); await g.waitForTimeout(200)
   const a = await g.evaluate(() => { const a = __shop.action(); __shop.use(); return a && a.kind })
   await g.waitForTimeout(600)
-  check(a === (t[1] === 'dough' ? 'take' : 'put'), `webkit: ${t[1]} で ${a}`)
+  check(a === (t[1] === 'noodles' ? 'take' : 'put'), `webkit: ${t[1]} で ${a}`)
 }
-const seen = await host.evaluate(() => Object.values(__shop.state().stations.oven1.slots).filter(Boolean).length)
-check(seen === 1, 'ホストの画面でもオーブンにパンが入っている')
+const seen = await host.evaluate(() => __shop.state().stations.boiler1.slots.filter(Boolean).length)
+check(seen === 1, 'ホストの画面でも茹で釜に麺が入っている')
+check((await host.title()).includes('ラーメン'), `題名 ${await host.title()}`)
 await host.waitForSelector('#result:not([hidden])', { timeout: 90000 })
 await g.waitForSelector('#result:not([hidden])', { timeout: 30000 })
 check(true, '2人とも結果画面')
